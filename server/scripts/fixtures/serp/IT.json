@@ -1,0 +1,53 @@
+{
+  "shopping_results": [
+    {
+      "position": 1,
+      "title": "Dr. Martens 1461 Crazy Horse - Scarpe stringate - gaucho",
+      "link": "https://www.zalando.it/dr-martens-1461-crazy-horse-scarpe-dr311a0ql-o11.html",
+      "source": "Zalando",
+      "price": "139,00 €",
+      "extracted_price": 139
+    },
+    {
+      "position": 2,
+      "title": "Dr. Martens 1461 Smooth, Scarpe Stringate Basse Unisex-Adulto, Nero",
+      "link": "https://www.amazon.it/dp/B00K0QFCGU",
+      "source": "Amazon.it",
+      "price": "129,00 €",
+      "extracted_price": 129
+    },
+    {
+      "position": 3,
+      "title": "Dr Martens 1461 Crazy Horse Gaucho",
+      "link": "https://www.spartoo.it/Dr-Martens-1461-CRAZY-HORSE-x12345.php",
+      "source": "Spartoo",
+      "price": "134,95 €",
+      "extracted_price": 134.95
+    },
+    {
+      "position": 4,
+      "title": "Dr. Martens 1461 Crazy Horse",
+      "link": "https://www.zalando.it/dr-martens-1461-crazy-horse-scarpe-dr311a0ql-o11.html?tracking=ad",
+      "source": "Zalando",
+      "price": "139,00 €",
+      "extracted_price": 139,
+      "tag": "Sponsored"
+    },
+    {
+      "position": 5,
+      "title": "Nike Air Force 1 '07 - Sneakers basse - white",
+      "link": "https://www.footlocker.it/it/product/nike-air-force-1/314.html",
+      "source": "Foot Locker",
+      "price": "119,99 €",
+      "extracted_price": 119.99
+    },
+    {
+      "position": 6,
+      "title": "1461 Crazy Horse Leather Oxford Shoes",
+      "link": "https://www.drmartens.com/it-it/1461-crazy-horse/p/27863220",
+      "source": "Dr. Martens",
+      "price": "150,00 €",
+      "extracted_price": 150
+    }
+  ]
+}

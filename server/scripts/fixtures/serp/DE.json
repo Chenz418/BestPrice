@@ -1,0 +1,34 @@
+{
+  "shopping_results": [
+    {
+      "position": 1,
+      "title": "Dr. Martens 1461 - Halbschuhe - crazy horse gaucho",
+      "link": "https://www.zalando.de/dr-martens-1461-halbschuhe-dr311a0ql-o11.html",
+      "source": "Zalando",
+      "price": "135,00 €",
+      "extracted_price": 135
+    },
+    {
+      "position": 2,
+      "title": "Dr. Martens 1460 Crazy Horse Stiefel",
+      "link": "https://www.aboutyou.de/p/dr-martens/1460-crazy-horse-boots-123",
+      "source": "About You",
+      "price": "149,00 €",
+      "extracted_price": 149
+    },
+    {
+      "position": 3,
+      "title": "Dr. Martens 1461 Crazy Horse Schnürschuhe",
+      "link": "https://www.otto.de/p/dr-martens-1461-crazy-horse-schnuerschuhe-123/",
+      "source": "OTTO"
+    },
+    {
+      "position": 4,
+      "title": "1461 Crazy Horse Leather Oxford Shoes",
+      "link": "https://www.drmartens.com/it-it/1461-crazy-horse/p/27863220",
+      "source": "Dr. Martens",
+      "price": "150,00 €",
+      "extracted_price": 150
+    }
+  ]
+}

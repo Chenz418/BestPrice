@@ -1,0 +1,16 @@
+{
+  "name": "@bestprice/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "identify": "tsx scripts/test-identify.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bestprice/shared": "*",
+    "zod": "^3.23.8"
+  }
+}

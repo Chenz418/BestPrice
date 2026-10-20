@@ -1,0 +1,25 @@
+{
+  "shopping_results": [
+    {
+      "position": 1,
+      "title": "Półbuty Dr. Martens 1461 Crazy Horse Gaucho",
+      "link": "https://www.eobuwie.com.pl/p/polbuty-dr-martens-1461-crazy-horse-999",
+      "source": "eobuwie.pl",
+      "price": "599,00 zł"
+    },
+    {
+      "position": 2,
+      "title": "Dr. Martens 1461 Crazy Horse - Półbuty sznurowane",
+      "link": "https://www.zalando.pl/dr-martens-1461-crazy-horse-polbuty-dr311a0ql-o11.html",
+      "source": "Zalando",
+      "price": "619,00 zł"
+    },
+    {
+      "position": 3,
+      "title": "Dr. Martens 1460 Smooth - Botki",
+      "link": "https://www.zalando.pl/dr-martens-1460-smooth-botki-123.html",
+      "source": "Zalando",
+      "price": "649,00 zł"
+    }
+  ]
+}
