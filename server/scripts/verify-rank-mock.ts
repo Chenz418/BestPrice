@@ -14,9 +14,9 @@
  */
 import {
   ProductCardSchema,
-  CandidateTableSchema,
-  type Candidate,
-  type CandidateTable,
+  CandidateListSchema,
+  type SearchCandidate,
+  type CandidateList,
   type PageSnapshot,
 } from "@bestprice/shared";
 import { verifyAndRank } from "../src/verify/verifyAndRank.ts";
@@ -47,32 +47,41 @@ interface Behaviour {
   shipping?: string; // "SHIP=yes;COST=0;CUR=EUR;THRESH=none"
 }
 
-function cand(p: Partial<Candidate> & { shop: string; url: string; priceEur: number }): Candidate {
+/**
+ * A candidate with a SERP price hint (the hint = the old pre-sort price; the
+ * CONFIRMED item price still comes from the mock page's PRICE token in /extract).
+ */
+function cand(p: {
+  shop: string;
+  url: string;
+  priceEur: number;
+  title?: string;
+  country?: string;
+  sponsored?: boolean;
+  seenInCountries?: string[];
+}): SearchCandidate {
   return {
     shop: p.shop,
     title: p.title ?? `${CARD.brand} ${CARD.model} ${CARD.colour}`,
-    price: p.price ?? p.priceEur,
-    currency: p.currency ?? "EUR",
     url: p.url,
     country: p.country ?? "IT",
+    snippet: null,
     sponsored: p.sponsored ?? false,
-    priceEur: p.priceEur,
     seenInCountries: p.seenInCountries ?? [p.country ?? "IT"],
-    matchReason: p.matchReason ?? null,
+    priceHint: { priceEur: p.priceEur, source: "serp", confirmed: false },
   };
 }
 
-function makeTable(rows: Candidate[]): CandidateTable {
-  return CandidateTableSchema.parse({
+function makeList(rows: SearchCandidate[]): CandidateList {
+  return CandidateListSchema.parse({
     productCard: CARD,
-    currency: "EUR",
     rows,
     meta: {
       countriesSearched: ["IT", "DE", "PL"],
       totalRaw: rows.length,
-      normalized: rows.length,
-      matched: rows.length,
+      droppedNonProduct: 0,
       afterDedupe: rows.length,
+      withPriceHint: rows.filter((r) => r.priceHint).length,
       fxBase: "EUR",
       builtAt: "2026-10-20T00:00:00.000Z",
     },
@@ -149,8 +158,8 @@ const t1Rows = [
   cand({ shop: "ZalandoDE", url: "https://zalando.de/p2", country: "DE", priceEur: 135.0 }),
   cand({ shop: "Otto", url: "https://otto.de/p3", country: "DE", priceEur: 137.0 }),
   cand({ shop: "ZalandoIT", url: "https://zalando.it/p4", country: "IT", priceEur: 139.0 }),
-  cand({ shop: "eobuwie", url: "https://eobuwie.pl/p5", country: "PL", price: 599, currency: "PLN", priceEur: 139.3 }),
-  cand({ shop: "ZalandoPL", url: "https://zalando.pl/p6", country: "PL", price: 619, currency: "PLN", priceEur: 143.95 }),
+  cand({ shop: "eobuwie", url: "https://eobuwie.pl/p5", country: "PL", priceEur: 139.3 }),
+  cand({ shop: "ZalandoPL", url: "https://zalando.pl/p6", country: "PL", priceEur: 143.95 }),
   cand({ shop: "DrMartens", url: "https://drmartens.com/p7", country: "DE", priceEur: 150.0, seenInCountries: ["DE", "IT"] }),
   cand({ shop: "AmazonIT", url: "https://amazon.it/p8", country: "IT", priceEur: 152.0 }),
 ];
@@ -165,7 +174,7 @@ const t1Behaviour = new Map<string, Behaviour>([
   ["https://amazon.it/p8", { page: "SAME=yes;SIZE=in;PRICE=152.00;CUR=EUR;PROMO=none", shipping: "SHIP=yes;COST=0;CUR=EUR;THRESH=none" }],
 ]);
 
-const r1 = await verifyAndRank(makeTable(t1Rows), {
+const r1 = await verifyAndRank(makeList(t1Rows), {
   ...makeDeps(t1Behaviour),
   deliveryCountry: "IT",
   rates,
@@ -174,9 +183,13 @@ const r1 = await verifyAndRank(makeTable(t1Rows), {
   checkedAt: "2026-10-20T00:00:00.000Z",
 });
 
-console.log("=== Scenario 1: fewer than 5 qualify (output available) ===");
-r1.top5.forEach((o, i) => console.log(`${i + 1}. €${o.guaranteedTotalEur.toFixed(2)}  ${o.shop}`));
-console.log("shippingUnknown:", r1.shippingUnknown.map((f) => f.shop));
+console.log("=== Scenario 1: matches ranked by best price (partial ones included) ===");
+r1.top5.forEach((o, i) =>
+  console.log(
+    `${i + 1}. €${o.sortPriceEur.toFixed(2)}${o.fullyVerified ? "" : ` (${o.missing.join(", ")})`}  ${o.shop}`,
+  ),
+);
+console.log("candidates:", r1.candidates.map((o) => o.shop));
 console.log("couldntVerify:", r1.couldntVerify.map((f) => f.shop));
 console.log("stats:", JSON.stringify(r1.stats));
 
@@ -187,9 +200,9 @@ const t2Rows = Array.from({ length: 10 }, (_, i) =>
   cand({ shop: `Shop${i}`, url: `https://shop${i}.eu/p`, country: "IT", priceEur: 100 + i }),
 );
 const t2Behaviour = new Map<string, Behaviour>(
-  t2Rows.map((c) => [c.url, { page: `SAME=yes;SIZE=in;PRICE=${c.priceEur.toFixed(2)};CUR=EUR;PROMO=none`, shipping: "SHIP=yes;COST=0;CUR=EUR;THRESH=none" } as Behaviour]),
+  t2Rows.map((c) => [c.url, { page: `SAME=yes;SIZE=in;PRICE=${(c.priceHint?.priceEur ?? 0).toFixed(2)};CUR=EUR;PROMO=none`, shipping: "SHIP=yes;COST=0;CUR=EUR;THRESH=none" } as Behaviour]),
 );
-const r2 = await verifyAndRank(makeTable(t2Rows), {
+const r2 = await verifyAndRank(makeList(t2Rows), {
   ...makeDeps(t2Behaviour),
   deliveryCountry: "IT",
   rates,
@@ -204,15 +217,17 @@ console.log(`top5: ${r2.top5.map((o) => o.shop).join(", ")} | processed ${r2.sta
 // --- Assertions -----------------------------------------------------------
 const s1 = r1.top5;
 const checks: Array<[string, boolean]> = [
-  ["S1: 4 offers qualify (fewer than 5 -> output available)", s1.length === 4],
-  ["S1: ranked by guaranteed total (ZalandoDE €135 free-ship beats Spartoo €134.95+6.99)", s1[0]?.shop === "ZalandoDE"],
-  ["S1: total ascending", s1.every((o, i) => i === 0 || o.guaranteedTotalEur >= s1[i - 1]!.guaranteedTotalEur)],
-  ["S1: eobuwie PLN converted & free over threshold (€139.30)", s1.some((o) => o.shop === "eobuwie" && o.guaranteedTotalEur === 139.3)],
-  ["S1: Otto dropped (size out)", !s1.some((o) => o.shop === "Otto") && r1.stats.dropped === 2],
+  ["S1: 5 best-price matches in Top 5", s1.length === 5],
+  ["S1: cheapest is ZalandoDE (€135 free-ship beats Spartoo €134.95+6.99)", s1[0]?.shop === "ZalandoDE"],
+  ["S1: ranked ascending by sort price", s1.every((o, i) => i === 0 || o.sortPriceEur >= s1[i - 1]!.sortPriceEur)],
+  ["S1: eobuwie PLN converted & free over threshold (€139.30 total)", s1.some((o) => o.shop === "eobuwie" && o.guaranteedTotalEur === 139.3)],
+  ["S1: Otto shown with 'size out of stock' label (not dropped)", s1.some((o) => o.shop === "Otto" && o.missing.includes("size out of stock"))],
+  ["S1: DrMartens shown with 'shipping cost unknown' label", s1.some((o) => o.shop === "DrMartens" && o.missing.includes("shipping cost unknown"))],
+  ["S1: ZalandoPL (different product) excluded from matches", !s1.some((o) => o.shop === "ZalandoPL") && !r1.candidates.some((o) => o.shop === "ZalandoPL")],
   ["S1: ZalandoIT couldn't verify (captcha)", r1.couldntVerify.some((f) => f.shop === "ZalandoIT")],
-  ["S1: DrMartens ships-but-cost-unknown bucket", r1.shippingUnknown.some((f) => f.shop === "DrMartens")],
+  ["S1: 6 matches, 4 fully verified", r1.stats.matches === 6 && r1.stats.fullyVerified === 4],
   ["S2: exactly 5 in Top 5", r2.top5.length === 5],
-  ["S2: cheapest 5 by total", r2.top5.map((o) => o.shop).join(",") === "Shop0,Shop1,Shop2,Shop3,Shop4"],
+  ["S2: cheapest 5 by price", r2.top5.map((o) => o.shop).join(",") === "Shop0,Shop1,Shop2,Shop3,Shop4"],
   ["S2: loop stopped early (processed < tableSize)", r2.stats.processed < r2.stats.tableSize],
 ];
 

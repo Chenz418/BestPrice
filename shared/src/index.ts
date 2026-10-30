@@ -16,14 +16,26 @@ export type {
 export {
   NormalizedCandidateSchema,
   CandidateSchema,
+  CountrySubstitutionSchema,
+  SearchCoverageSchema,
   SearchMetaSchema,
   CandidateTableSchema,
+  PriceHintSchema,
+  SearchCandidateSchema,
+  CandidateListMetaSchema,
+  CandidateListSchema,
 } from "./search.ts";
 export type {
   NormalizedCandidate,
   Candidate,
+  CountrySubstitution,
+  SearchCoverage,
   SearchMeta,
   CandidateTable,
+  PriceHint,
+  SearchCandidate,
+  CandidateListMeta,
+  CandidateList,
 } from "./search.ts";
 
 export {
@@ -47,6 +59,8 @@ export {
   effectiveShippingEur,
   guaranteedTotalEur,
   classifyOffer,
+  isRankableMatch,
+  missingInfo,
   countQualified,
   rankVerified,
 } from "./ranking.ts";

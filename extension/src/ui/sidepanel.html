@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BestPrice</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>BestPrice</h1>
+      <p class="tagline">Best total delivered price for one product.</p>
+    </header>
+
+    <!-- A. Input -->
+    <section id="input-section" class="card">
+      <h2>1 · Describe the product</h2>
+      <label>Product name <input id="in-name" type="text" placeholder="e.g. Nike Air Force 1 '07" /></label>
+      <label>Product code <input id="in-code" type="text" placeholder="e.g. CW2288-111" /></label>
+      <label>Note <input id="in-message" type="text" placeholder="anything extra (any language)" /></label>
+      <label>Image URL <input id="in-image" type="url" placeholder="https://… (optional)" /></label>
+      <div class="row">
+        <label class="req">Size <input id="in-size" type="text" placeholder="e.g. EU 43" required /></label>
+        <label class="req">Deliver to
+          <select id="in-country"></select>
+        </label>
+      </div>
+      <button id="btn-identify" class="primary">Identify →</button>
+    </section>
+
+    <!-- A.2 Card confirmation -->
+    <section id="card-section" class="card hidden">
+      <h2>2 · Confirm the product</h2>
+      <div class="card-preview">
+        <img id="card-image" alt="product" />
+        <div class="card-image-controls">
+          <span id="card-image-confidence" class="badge"></span>
+          <button id="btn-refind" class="link">Refind image</button>
+        </div>
+      </div>
+      <div id="card-fields"></div>
+      <p id="card-notes" class="notes"></p>
+      <div class="row">
+        <button id="btn-back" class="link">← Edit input</button>
+        <button id="btn-search" class="primary">Confirm &amp; search →</button>
+      </div>
+    </section>
+
+    <!-- Progress -->
+    <section id="progress-section" class="card hidden">
+      <h2>3 · Working…</h2>
+      <p id="progress-line" class="progress-line"></p>
+      <div class="bar"><div id="progress-bar"></div></div>
+      <button id="btn-cancel" class="link">Cancel</button>
+    </section>
+
+    <!-- D. Results -->
+    <section id="results-section" class="card hidden">
+      <h2>Results</h2>
+      <div id="coverage" class="coverage"></div>
+      <div id="results"></div>
+      <button id="btn-restart" class="primary">New search</button>
+    </section>
+
+    <!-- Errors -->
+    <div id="error-toast" class="toast hidden"></div>
+
+    <script type="module" src="./sidepanel.js"></script>
+  </body>
+</html>

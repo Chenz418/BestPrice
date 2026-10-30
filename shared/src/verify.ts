@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { CandidateSchema } from "./search.ts";
+import { SearchCandidateSchema } from "./search.ts";
 
 /**
  * Verify + rank contracts (plan steps C and D).
  *
- *   Candidate --(Dev 1 page verifier)--> PageSnapshot
+ *   SearchCandidate --(Dev 1 page verifier)--> PageSnapshot
  *   PageSnapshot --(Extract API, Dev 2)--> VerifiedFacts
  *   VerifiedFacts[] --(ranking, Dev 2)--> RankedResults (Top 5)
  *
@@ -25,8 +25,8 @@ export type SnapshotOutcome = z.infer<typeof SnapshotOutcomeSchema>;
 
 /** A snapshot of one shop product page (Dev 1 -> Extract API). */
 export const PageSnapshotSchema = z.object({
-  /** The offer being verified (from the step-B table). */
-  candidate: CandidateSchema,
+  /** The organic candidate being verified (a row from the V2 CandidateList). */
+  candidate: SearchCandidateSchema,
   /** Delivery country (ISO2) the shipping check is for. */
   deliveryCountry: z.string().length(2),
   /** The size the user wants (echoed from the query); null if none. */
@@ -84,30 +84,50 @@ export const VerifiedFactsSchema = z.object({
 });
 export type VerifiedFacts = z.infer<typeof VerifiedFactsSchema>;
 
-/** A qualifying offer with its honest guaranteed total (D.1/D.2). */
+/**
+ * A ranked offer (D.1/D.2). Ranking is by BEST PRICE even when some checks are
+ * unconfirmed, so a matching product is never silently dropped just because the
+ * page hid its size/shipping info. `missing` names exactly what couldn't be
+ * confirmed, so the UI can show a small label; `fullyVerified` is true only when
+ * `missing` is empty.
+ */
 export const RankedOfferSchema = VerifiedFactsSchema.extend({
-  /** item price + shipping (free-shipping threshold applied). */
-  guaranteedTotalEur: z.number().nonnegative(),
+  /** Price used for ranking: the guaranteed total if known, else the item price. */
+  sortPriceEur: z.number().nonnegative(),
+  /** Item + shipping (free-ship threshold applied); null if shipping is unknown. */
+  guaranteedTotalEur: z.number().nonnegative().nullable(),
+  /** True only when size, ships-to, and shipping cost are all confirmed. */
+  fullyVerified: z.boolean(),
+  /** Short labels for what couldn't be confirmed (empty when fullyVerified). */
+  missing: z.array(z.string()),
   /** Promotions rendered as "possible extra savings" (shown separately). */
   possibleExtraSavings: z.array(z.string()),
 });
 export type RankedOffer = z.infer<typeof RankedOfferSchema>;
 
-/** Final output (D.3): Top 5 by guaranteed total + the other buckets. */
+/**
+ * Final output (D.3): the Top N best-price matching products + the rest.
+ *
+ * `top5` and `candidates` are the SAME product as the card with a confirmed price,
+ * ranked cheapest-first; offers that aren't fully verified still appear here, each
+ * carrying `missing` labels. `couldntVerify` is for pages we couldn't read at all
+ * (CAPTCHA / login / blocked / error).
+ */
 export const RankedResultsSchema = z.object({
-  /** Up to 5 qualifying offers, cheapest guaranteed total first. */
+  /** Up to N best-price matching products (may include partially-verified ones). */
   top5: z.array(RankedOfferSchema),
-  /** Verified, same product, in stock, ships — but shipping cost unknown. */
-  shippingUnknown: z.array(VerifiedFactsSchema),
-  /** CAPTCHA / login / blocked / error (C.6). */
+  /** The remaining matching products beyond the Top N, same ranking. */
+  candidates: z.array(RankedOfferSchema),
+  /** CAPTCHA / login / blocked / error — page couldn't be read (C.6). */
   couldntVerify: z.array(VerifiedFactsSchema),
   stats: z.object({
     tableSize: z.number().int().nonnegative(),
     processed: z.number().int().nonnegative(),
     verified: z.number().int().nonnegative(),
-    qualified: z.number().int().nonnegative(),
-    dropped: z.number().int().nonnegative(),
-    shippingUnknown: z.number().int().nonnegative(),
+    /** Matching products with a confirmed price (top5 + candidates). */
+    matches: z.number().int().nonnegative(),
+    /** How many of those passed every check. */
+    fullyVerified: z.number().int().nonnegative(),
     couldntVerify: z.number().int().nonnegative(),
   }),
 });

@@ -10,7 +10,7 @@ import type { Candidate } from "@bestprice/shared";
  */
 
 /** Normalise a URL to a stable identity: lowercase host+path, no query/hash. */
-function urlKey(rawUrl: string): string | null {
+export function urlKey(rawUrl: string): string | null {
   try {
     const u = new URL(rawUrl);
     const host = u.hostname.replace(/^www\./, "").toLowerCase();

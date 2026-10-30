@@ -1,6 +1,6 @@
 import {
-  type CandidateTable,
-  type Candidate,
+  type CandidateList,
+  type SearchCandidate,
   type PageSnapshot,
   type VerifiedFacts,
   type RankedResults,
@@ -22,11 +22,17 @@ import { extractFacts, type ExtractDeps } from "./extract.ts";
  * (or whatever qualified — "output available products" when fewer than 5).
  *
  * The server never opens pages itself; that is why `verify` is injected.
+ *
+ * NOTE: this is a SERVER-SIDE TEST harness. In production the frontend owns the
+ * price pre-sort (C.0) and the verify loop; the backend only exposes /extract and
+ * /rank. Here we approximate C.0 by ordering candidates on their SERP priceHint
+ * (candidates without a hint sort last), so the cheapest-first + early-stop
+ * behaviour can be exercised offline.
  */
 
 /** Opens a shop page and returns a snapshot (Dev 1's Page verifier, C.1/C.6). */
 export type PageVerifier = (
-  candidate: Candidate,
+  candidate: SearchCandidate,
   ctx: { deliveryCountry: string; requestedSize: string | null },
 ) => Promise<PageSnapshot>;
 
@@ -65,18 +71,23 @@ async function runPool<T, R>(
 }
 
 export async function verifyAndRank(
-  table: CandidateTable,
+  list: CandidateList,
   deps: VerifyAndRankDeps,
 ): Promise<RankedResults> {
   const deliveryCountry = deps.deliveryCountry ?? "IT";
-  const requestedSize = deps.requestedSize ?? table.productCard.requestedSize ?? null;
+  const requestedSize = deps.requestedSize ?? list.productCard.requestedSize ?? null;
   const batchSize = deps.batchSize ?? 15;
   const target = deps.target ?? 5;
   const concurrency = deps.concurrency ?? 3;
 
   const rates: Rates = deps.rates ?? (await fetchEurRates());
   const shippingCache = deps.shippingCache ?? new Map();
-  const rows = table.rows;
+  // Approximate the frontend's C.0 pre-sort: cheapest priceHint first, no-hint last.
+  const rows = [...list.rows].sort(
+    (a, b) =>
+      (a.priceHint?.priceEur ?? Number.POSITIVE_INFINITY) -
+      (b.priceHint?.priceEur ?? Number.POSITIVE_INFINITY),
+  );
   const facts: VerifiedFacts[] = [];
 
   for (let i = 0; i < rows.length; i += batchSize) {
@@ -84,7 +95,7 @@ export async function verifyAndRank(
     const batchFacts = await runPool(batch, concurrency, async (candidate) => {
       try {
         const snapshot = await deps.verify(candidate, { deliveryCountry, requestedSize });
-        return await extractFacts(snapshot, table.productCard, {
+        return await extractFacts(snapshot, list.productCard, {
           ...(deps.createResponse ? { createResponse: deps.createResponse } : {}),
           ...(deps.model ? { model: deps.model } : {}),
           rates,

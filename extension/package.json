@@ -1,0 +1,16 @@
+{
+  "name": "@bestprice/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BestPrice browser extension (Dev 1): side panel, orchestrator, page verifier.",
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bestprice/shared": "*",
+    "zod": "^3.23.8"
+  }
+}

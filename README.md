@@ -1,64 +1,79 @@
 # BestPrice
 
-A browser-extension + server prototype that finds the current **best total price**
-for a single product, delivered to the user's country. No long-term price monitoring.
+BestPrice is a browser extension plus a local server that finds the current
+**best total delivered price** for a single product across European online shops.
+You describe a product (a name, a style code, a note, or a photo) together with
+your size and delivery country; BestPrice identifies the exact product, searches
+shops across countries, opens each candidate page to confirm the product, size
+availability and shipping, and ranks the offers by their guaranteed total price
+(item + shipping).
 
-See [`docs/BestPrice_Prototype.pdf`](docs/BestPrice_Prototype.pdf) for the full plan,
-and [`docs/DECISIONS.md`](docs/DECISIONS.md) for the decision log.
+The project is a monorepo with three workspaces:
 
-> **Status:** repository scaffold only. No implementation yet.
+| Folder       | Contents                                                      |
+| ------------ | ------------------------------------------------------------- |
+| `extension/` | Chrome side panel, orchestrator, and page verifier (frontend) |
+| `server/`    | Identify / Search / Extract / Rank HTTP APIs (holds all keys) |
+| `shared/`    | Shared TypeScript types and runtime validation (zod)          |
 
-## Repository layout (monorepo)
+The server exists so that **API keys never ship inside the extension**: the
+extension makes no third-party calls and opens shop pages with the user's own
+browser, while the server holds every credential.
 
-| Folder       | Contents                                              |
-| ------------ | ----------------------------------------------------- |
-| `extension/` | Browser side panel, orchestrator, page verifier       |
-| `server/`    | Identify / Search / Extract APIs (holds all API keys)  |
-| `shared/`    | Shared TypeScript types, runtime validation, fixtures  |
+## Requirements
 
-The server exists because **API keys must never ship inside an extension**. It is
-also the boundary between the two developers: one owns everything in the browser,
-the other owns everything behind the server's API.
+- [Node.js](https://nodejs.org/) 20 or newer (developed on 22)
+- Google Chrome (or a Chromium-based browser that supports Manifest V3 side panels)
+- An LLM API key (OpenAI-compatible; DeepSeek by default)
+- Optionally, a [SerpApi](https://serpapi.com/) key for live search
+  (without it, the server falls back to bundled fixtures)
 
-## Work division
+## Deployment
 
-| Module          | Owner            | Job                                                     | Input → output                  |
-| --------------- | ---------------- | ------------------------------------------------------- | ------------------------------- |
-| Shared contracts| Both             | TS types, runtime validation (zod), test fixtures       | —                               |
-| Side panel UI   | Dev 1            | Input form, card confirmation, progress, results        | User input → query; results → UI|
-| Orchestrator    | Dev 1            | Runs A–D, concurrency, timeouts, cancel                 | Query → ranked results          |
-| Page verifier   | Dev 1            | Opens shop pages, collects snapshots, detects CAPTCHAs  | Candidate → page snapshot       |
-| Identify API    | Dev 2            | Vision LLM + text → product card                        | Query → product card            |
-| Search API      | Dev 2            | SERP calls, normalising, matching, EUR conversion       | Product card → candidates       |
-| Extract API     | Dev 2            | LLM extraction + validation                             | Page snapshot → verified facts  |
-| Pricing & rank  | Dev 2 (in shared)| Totals, thresholds, dedupe, top 5 (pure functions)      | Verified offers → top 5         |
+### 1. Install dependencies
 
-The data objects in the last column (query, product card, candidate, page snapshot,
-verified facts) are the **contracts**. Agree on them first; then each person can
-build and test alone.
+```bash
+git clone https://github.com/Chenz418/BestPrice.git
+cd BestPrice
+npm install
+```
 
-## Pipeline (A–D)
+### 2. Configure credentials
 
-- **A. Identify** — LLM builds a product card; user confirms before searching.
-- **B. Search** (server) — one price-sorted SERP call per country in parallel;
-  normalise, keep exact matches, convert to EUR, merge duplicates, keep ~15 cheapest.
-- **C. Verify** (extension) — open each shop's own page (never Google), confirm
-  product, check size stock + shipping to delivery country, record promotions
-  (don't apply them), trust check.
-- **D. Rank & show** — rank by guaranteed total (item + shipping); show possible
-  extra savings separately; display Top 5 + "couldn't verify".
+Copy the example environment file and fill in your keys. **Never commit `.env`.**
 
-## Getting started
+```bash
+cp .env.example .env
+# then edit .env and set DEEPSEEK_API_KEY (and SERP_API_KEY for live search)
+```
 
-> Tooling (package manager, TypeScript, lint/format, CI) is not set up yet.
+Set a spending limit on every API account before use.
 
-1. Copy `.env.example` to `.env` and fill in your keys (never commit `.env`).
-2. Set spending limits on your API accounts.
+### 3. Start the server
 
-## Co-development rules
+```bash
+npm run serve
+```
 
-- **Contract first** — agree on shared types / API before coding.
-- **Protected `main`** — no direct pushes; every change via a reviewed pull request (GitHub flow).
-- **Small, frequent merges** — ~15-minute reviews; merge every few days.
-- **Integrate from day one** — build a walking skeleton (side panel → mock server → fake top 5), then replace fakes module by module.
-- **Keep secrets out of Git** — see `.gitignore` and `.env.example`; revoke any leaked key immediately.
+The server listens on `http://localhost:3000` (override with the `PORT` env var).
+
+### 4. Build and load the extension
+
+```bash
+npm run build:extension      # outputs extension/dist/
+# use `npm run watch:extension` to rebuild on change
+```
+
+Then load it in Chrome:
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode** (top right).
+3. Click **Load unpacked** and select the `extension/dist` folder.
+
+Click the BestPrice toolbar icon to open the side panel, enter a product plus
+your size and delivery country, confirm the identified product card, and run the
+search.
+
+## License
+
+Released as open source. See `LICENSE` if present, or add one before publishing.

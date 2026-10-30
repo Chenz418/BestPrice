@@ -5,13 +5,14 @@ import {
   ProductCardSchema,
   PageSnapshotSchema,
   VerifiedFactsSchema,
-  CandidateTableSchema,
+  CandidateListSchema,
   rankVerified,
 } from "@bestprice/shared";
 import { config } from "./config.ts";
 import { identify } from "./identify/identify.ts";
 import { attachRepresentativeImage } from "./identify/representativeImage.ts";
 import { search } from "./search/search.ts";
+import { fetchEurRates } from "./search/currency.ts";
 import { extractFacts } from "./verify/extract.ts";
 import { verifyAndRank } from "./verify/verifyAndRank.ts";
 import { httpPageVerifier } from "./verify/pageVerifier.ts";
@@ -19,13 +20,17 @@ import { LlmError } from "./llm/responsesClient.ts";
 import { SearchError } from "./search/serp/types.ts";
 
 /**
- * Identify API HTTP server (plan step A, server side).
+ * BestPrice server — V2 (Google-direct) API surface. The backend holds all keys;
+ * the frontend (Dev 1) opens shop pages, runs the C.0 price pre-sort, and drives
+ * the verify loop. Endpoints:
  *
- *   POST /identify   body: Query (JSON)   ->   ProductCard (JSON)
- *   GET  /health     ->   { ok: true }
- *
- * The extension's orchestrator calls this; the side panel then shows the card
- * for the user to confirm (A.2) before Search runs.
+ *   POST /identify   Query            ->  ProductCard          (A)
+ *   POST /search     { productCard }  ->  CandidateList        (B, Google web)
+ *   GET  /fx                          ->  { base, rates }      (C.0 FX for the FE)
+ *   POST /extract    { snapshot, … }  ->  VerifiedFacts        (C.2–C.6)
+ *   POST /rank       { facts, … }     ->  RankedResults        (D)
+ *   POST /verify     { candidateList }->  RankedResults        (TEST-ONLY C+D)
+ *   GET  /health                      ->  { ok: true }
  */
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // 8 MB — room for an inline base64 image.
@@ -95,12 +100,11 @@ async function handleIdentify(req: IncomingMessage, res: ServerResponse): Promis
   }
 }
 
-/** Body for POST /search: a ProductCard plus optional search controls. */
+/** Body for POST /search: a ProductCard plus optional search controls (V2). */
 const SearchBodySchema = z.object({
   productCard: ProductCardSchema,
   countries: z.array(z.string().length(2)).optional(),
   num: z.number().int().positive().max(100).optional(),
-  model: z.string().optional(),
 });
 
 async function handleSearch(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -116,7 +120,7 @@ async function handleSearch(req: IncomingMessage, res: ServerResponse): Promise<
   const parsed = SearchBodySchema.safeParse(json);
   if (!parsed.success) {
     sendJson(res, 400, {
-      error: "Invalid search body (expects { productCard, countries?, num?, model? }).",
+      error: "Invalid search body (expects { productCard, countries?, num? }).",
       details: parsed.error.flatten(),
     });
     return;
@@ -124,15 +128,32 @@ async function handleSearch(req: IncomingMessage, res: ServerResponse): Promise<
 
   const { productCard, ...opts } = parsed.data;
   try {
-    const table = await search(productCard, opts);
-    sendJson(res, 200, table);
+    const list = await search(productCard, opts);
+    sendJson(res, 200, list);
   } catch (err) {
-    if (err instanceof LlmError) {
-      sendJson(res, 502, { error: "Upstream LLM error.", detail: err.message });
-    } else if (err instanceof SearchError) {
+    // Search no longer calls an LLM; failures are SERP / FX network or validation.
+    if (err instanceof SearchError) {
       sendJson(res, 502, { error: "SERP / FX error.", detail: err.message });
     } else if (err instanceof ZodError) {
       sendJson(res, 422, { error: "Result failed validation.", detail: err.message });
+    } else {
+      sendJson(res, 500, { error: "Internal error.", detail: String(err) });
+    }
+  }
+}
+
+/**
+ * GET /fx — EUR reference rates (ECB via Frankfurter), so the frontend's C.0
+ * price pre-sort converts JSON-LD prices to EUR with the SAME rates the backend
+ * uses. Keeps all FX on the backend side of the key/network boundary.
+ */
+async function handleFx(res: ServerResponse): Promise<void> {
+  try {
+    const rates = await fetchEurRates();
+    sendJson(res, 200, { base: "EUR", rates, fetchedAt: new Date().toISOString() });
+  } catch (err) {
+    if (err instanceof SearchError) {
+      sendJson(res, 502, { error: "FX error.", detail: err.message });
     } else {
       sendJson(res, 500, { error: "Internal error.", detail: String(err) });
     }
@@ -206,9 +227,13 @@ async function handleRank(req: IncomingMessage, res: ServerResponse): Promise<vo
   sendJson(res, 200, results);
 }
 
-/** Body for POST /verify: a step-B table; runs C+D with the HTTP page verifier. */
+/**
+ * Body for POST /verify: a V2 CandidateList; runs C+D with the SERVER-SIDE HTTP
+ * page verifier. TEST-ONLY — in production the frontend opens pages and drives
+ * /extract → /rank itself (a server IP gets blocked and lacks the user locale).
+ */
 const VerifyBodySchema = z.object({
-  table: CandidateTableSchema,
+  candidateList: CandidateListSchema,
   deliveryCountry: z.string().length(2).optional(),
   requestedSize: z.string().nullable().optional(),
   model: z.string().optional(),
@@ -231,9 +256,9 @@ async function handleVerify(req: IncomingMessage, res: ServerResponse): Promise<
     sendJson(res, 400, { error: "Invalid body (expects { table, ... }).", details: parsed.error.flatten() });
     return;
   }
-  const { table, ...opts } = parsed.data;
+  const { candidateList, ...opts } = parsed.data;
   try {
-    const results = await verifyAndRank(table, { verify: httpPageVerifier, ...opts });
+    const results = await verifyAndRank(candidateList, { verify: httpPageVerifier, ...opts });
     sendJson(res, 200, results);
   } catch (err) {
     if (err instanceof LlmError) sendJson(res, 502, { error: "Upstream LLM error.", detail: err.message });
@@ -264,6 +289,13 @@ const server = createServer((req, res) => {
 
   if (method === "POST" && url === "/search") {
     handleSearch(req, res).catch((err) => {
+      sendJson(res, 500, { error: "Internal error.", detail: String(err) });
+    });
+    return;
+  }
+
+  if (method === "GET" && url === "/fx") {
+    handleFx(res).catch((err) => {
       sendJson(res, 500, { error: "Internal error.", detail: String(err) });
     });
     return;

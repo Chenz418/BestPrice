@@ -1,4 +1,4 @@
-import type { ProductCard, Candidate } from "@bestprice/shared";
+import type { ProductCard, SearchCandidate } from "@bestprice/shared";
 import type { JsonSchemaFormat } from "../llm/responsesClient.ts";
 
 /**
@@ -29,6 +29,14 @@ text (and maybe structured data). Decide, using ONLY the provided text:
   dropdowns / stock labels / structured data. true = in stock, false = out of
   stock or unavailable, null = the page doesn't say. If no size was requested,
   return true.
+  SIZE SYSTEMS: the page may list sizes in a different system (EU / UK / US) than
+  the requested size. Convert before judging — treat equivalent sizes as the same.
+  For adult shoes the standard men's equivalences are:
+    UK 5=EU 38=US 6 · UK 6=EU 39=US 7 · UK 7=EU 41=US 8 · UK 8=EU 42=US 9 ·
+    UK 9=EU 43=US 10 · UK 10=EU 44=US 11 · UK 11=EU 45=US 12 · UK 12=EU 47=US 13
+  (±1 EU is an acceptable match). So requested "EU 42" matches a "UK 8" listing.
+  Only return null if, AFTER converting, the page still doesn't reveal that size's
+  availability.
 - pagePrice / pageCurrency: the current selling price shown on the page for this
   product, as a number plus its ISO 4217 currency. Use the price a buyer pays now
   (after any already-applied on-page discount, but NOT coupon codes).
@@ -83,7 +91,7 @@ export const EXTRACT_PRODUCT_FORMAT: JsonSchemaFormat = {
 
 export function buildProductInput(
   card: ProductCard,
-  snapshotCandidate: Candidate,
+  snapshotCandidate: SearchCandidate,
   requestedSize: string | null,
   pageText: string,
   structuredData: unknown,
@@ -95,6 +103,7 @@ export function buildProductInput(
     ["styleCode", card.styleCode],
     ["barcode", card.barcode],
     ["category", card.category],
+    ["sizeSystem", card.sizeSystem],
   ]
     .filter(([, v]) => v)
     .map(([k, v]) => `- ${k}: ${v}`)

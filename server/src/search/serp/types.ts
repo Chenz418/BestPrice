@@ -20,6 +20,8 @@ export interface RawSerpResult {
   country: string;
   /** Whether the provider flagged this sponsored / an ad. */
   sponsored: boolean;
+  /** Organic result snippet / description, if any (Google web search). */
+  snippet?: string | null;
   /** Product thumbnail image URL, if the provider returned one. */
   thumbnail: string | null;
   /** Original provider object, kept for debugging / LLM fallback. */

@@ -44,20 +44,25 @@ function optional(name: string, fallback: string): string {
 }
 
 export const config = {
-  /** OpenAI-compatible proxy base URL (ends without a trailing slash). */
+  /**
+   * LLM provider base URL (no trailing slash). DeepSeek is OpenAI-compatible and
+   * exposes the Responses API at `/responses`, so the existing client is reused.
+   * `DEEPSEEK_BASE_URL` wins; `OPENAI_BASE_URL` is kept as a fallback for other
+   * OpenAI-compatible proxies.
+   */
   openaiBaseUrl: optional(
-    "OPENAI_BASE_URL",
-    "https://apiclaude.cc/v1",
+    "DEEPSEEK_BASE_URL",
+    optional("OPENAI_BASE_URL", "https://api.deepseek.com"),
   ).replace(/\/+$/, ""),
 
-  /** Vision-capable model used to build the product card. */
-  identifyModel: optional("IDENTIFY_MODEL", "gpt-4o"),
+  /** Vision-capable model used to build the product card (DeepSeek-V4.1-Flash). */
+  identifyModel: optional("IDENTIFY_MODEL", "deepseek-flash"),
 
   /** Model used by the Search API's match / normalise agents. */
-  searchModel: optional("SEARCH_MODEL", "gpt-4o"),
+  searchModel: optional("SEARCH_MODEL", "deepseek-flash"),
 
   /** Model used by the Extract API's verification agents. */
-  extractModel: optional("EXTRACT_MODEL", "gpt-4o"),
+  extractModel: optional("EXTRACT_MODEL", "deepseek-flash"),
 
   /** Countries the Search API queries by default (comma-separated ISO2). */
   searchCountries: optional("SEARCH_COUNTRIES", "")
@@ -73,8 +78,13 @@ export const config = {
     return Boolean(process.env.SERP_API_KEY?.trim());
   },
 
-  /** Resolve the API key lazily so the key is only needed when a call is made. */
+  /**
+   * LLM API key, resolved lazily. Prefers `DEEPSEEK_API_KEY`; falls back to
+   * `OPENAI_API_KEY` so an existing OpenAI-compatible key keeps working.
+   */
   openaiApiKey(): string {
+    const deepseek = process.env.DEEPSEEK_API_KEY?.trim();
+    if (deepseek) return deepseek;
     return required("OPENAI_API_KEY");
   },
 

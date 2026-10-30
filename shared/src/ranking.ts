@@ -49,7 +49,33 @@ export function classifyOffer(f: VerifiedFacts): OfferClass {
   return guaranteedTotalEur(f) == null ? "shipping_unknown" : "qualified";
 }
 
-/** How many offers currently qualify (used by the loop's stop condition). */
+/**
+ * Is this a rankable product match — the SAME product as the card, with a price
+ * confirmed on the page? Size and shipping may still be unconfirmed; those are
+ * reported via `missingInfo`, not used to exclude the offer from the ranking.
+ */
+export function isRankableMatch(f: VerifiedFacts): boolean {
+  return (
+    f.outcome === "verified" &&
+    f.sameProduct &&
+    f.priceConfirmedOnPage &&
+    f.itemPriceEur != null
+  );
+}
+
+/** Short labels for what a matching offer couldn't confirm (empty = all good). */
+export function missingInfo(f: VerifiedFacts): string[] {
+  const out: string[] = [];
+  if (f.sizeInStock === false) out.push("size out of stock");
+  else if (f.sizeInStock == null) out.push("size availability unconfirmed");
+
+  if (f.shipsTo === false) out.push("doesn't ship to your country");
+  else if (f.shipsTo == null) out.push("ships-to unconfirmed");
+  else if (guaranteedTotalEur(f) == null) out.push("shipping cost unknown");
+  return out;
+}
+
+/** How many offers currently qualify on EVERY check (loop stop condition). */
 export function countQualified(facts: VerifiedFacts[]): number {
   let n = 0;
   for (const f of facts) if (classifyOffer(f) === "qualified") n++;
@@ -57,9 +83,15 @@ export function countQualified(facts: VerifiedFacts[]): number {
 }
 
 function toRankedOffer(f: VerifiedFacts): RankedOffer {
+  const total = guaranteedTotalEur(f);
+  const missing = missingInfo(f);
   return {
     ...f,
-    guaranteedTotalEur: guaranteedTotalEur(f)!,
+    // A confirmed item price is guaranteed by isRankableMatch, so this is a number.
+    sortPriceEur: total ?? f.itemPriceEur!,
+    guaranteedTotalEur: total,
+    fullyVerified: missing.length === 0,
+    missing,
     possibleExtraSavings: f.promotions.map((p) =>
       p.conditions ? `${p.text} (${p.conditions})` : p.text,
     ),
@@ -67,48 +99,34 @@ function toRankedOffer(f: VerifiedFacts): RankedOffer {
 }
 
 /**
- * Rank verified facts into the final result (D.3). `top` defaults to 5. Qualifying
- * offers are sorted by guaranteed total ascending; the other buckets are returned
- * as-is for the UI ("couldn't verify" and "ships, cost unknown").
+ * Rank verified facts into the final result (D.3). `top` defaults to 5.
+ *
+ * Every matching product with a confirmed price is ranked cheapest-first by its
+ * guaranteed total (or item price when shipping is unknown) — partially-verified
+ * offers included, each carrying `missing` labels. The Top N are split out; the
+ * rest are `candidates`. Only pages we couldn't read land in `couldntVerify`.
  */
 export function rankVerified(
   facts: VerifiedFacts[],
   opts: { tableSize: number; processed: number; top?: number },
 ): RankedResults {
-  const qualified: RankedOffer[] = [];
-  const shippingUnknown: VerifiedFacts[] = [];
-  const couldntVerify: VerifiedFacts[] = [];
-  let dropped = 0;
+  const matches = facts
+    .filter(isRankableMatch)
+    .map(toRankedOffer)
+    .sort((a, b) => a.sortPriceEur - b.sortPriceEur);
+  const couldntVerify = facts.filter((f) => f.outcome === "couldnt_verify");
 
-  for (const f of facts) {
-    switch (classifyOffer(f)) {
-      case "qualified":
-        qualified.push(toRankedOffer(f));
-        break;
-      case "shipping_unknown":
-        shippingUnknown.push(f);
-        break;
-      case "couldnt_verify":
-        couldntVerify.push(f);
-        break;
-      default:
-        dropped++;
-    }
-  }
-
-  qualified.sort((a, b) => a.guaranteedTotalEur - b.guaranteedTotalEur);
-
+  const top = opts.top ?? 5;
   return {
-    top5: qualified.slice(0, opts.top ?? 5),
-    shippingUnknown,
+    top5: matches.slice(0, top),
+    candidates: matches.slice(top),
     couldntVerify,
     stats: {
       tableSize: opts.tableSize,
       processed: opts.processed,
       verified: facts.filter((f) => f.outcome === "verified").length,
-      qualified: qualified.length,
-      dropped,
-      shippingUnknown: shippingUnknown.length,
+      matches: matches.length,
+      fullyVerified: matches.filter((o) => o.fullyVerified).length,
       couldntVerify: couldntVerify.length,
     },
   };

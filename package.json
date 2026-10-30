@@ -5,10 +5,13 @@
   "description": "BestPrice monorepo — browser extension + server that finds the best total delivered price for one product.",
   "workspaces": [
     "shared",
-    "server"
+    "server",
+    "extension"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p shared/tsconfig.json && tsc --noEmit -p server/tsconfig.json",
+    "typecheck": "tsc --noEmit -p shared/tsconfig.json && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p extension/tsconfig.json",
+    "build:extension": "npm --workspace @bestprice/extension run build",
+    "watch:extension": "npm --workspace @bestprice/extension run watch",
     "identify": "tsx server/scripts/test-identify.ts",
     "search": "tsx server/scripts/test-search.ts",
     "pipeline": "tsx server/scripts/test-pipeline.ts",

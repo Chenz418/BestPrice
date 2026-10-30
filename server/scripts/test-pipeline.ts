@@ -28,6 +28,7 @@ import { attachRepresentativeImage } from "../src/identify/representativeImage.t
 import { search, type SearchOptions } from "../src/search/search.ts";
 import { mockSerpProvider } from "../src/search/serp/mock.ts";
 import { serpApiProvider } from "../src/search/serp/serpapi.ts";
+import { googleProvider } from "../src/search/serp/google.ts";
 import { LlmError } from "../src/llm/responsesClient.ts";
 import { SearchError } from "../src/search/serp/types.ts";
 import { printTable } from "./_printTable.ts";
@@ -123,19 +124,18 @@ async function main(): Promise<void> {
     }
 
     const opts: SearchOptions = {};
-    if (model) opts.model = model;
     if (args.countries) {
       opts.countries = args.countries.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean);
     }
     if (args.num && args.num !== "true") opts.num = Number(args.num);
     if (args.provider === "mock") opts.provider = mockSerpProvider;
-    else if (args.provider === "serpapi") opts.provider = serpApiProvider;
+    else if (args.provider === "serpapi" || args.provider === "google") opts.provider = googleProvider;
 
-    console.log("\n=== Step B: Search (B.1–B.4) ===");
+    console.log("\n=== Step B: Search (Google-direct) ===");
     const started = process.hrtime.bigint();
-    const table = await search(card, opts);
+    const list = await search(card, opts);
     const ms = Number(process.hrtime.bigint() - started) / 1e6;
-    printTable(table);
+    printTable(list);
     console.log(`\n(search done in ${ms.toFixed(0)} ms)`);
   } catch (err) {
     if (err instanceof LlmError) console.error("\nLLM error:", err.message);

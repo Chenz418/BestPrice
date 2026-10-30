@@ -7,6 +7,7 @@ import {
 } from "@bestprice/shared";
 import { config } from "../config.ts";
 import { callStructured, type CreateResponseFn } from "../llm/structured.ts";
+import { currencyForCountry } from "../search/countries.ts";
 import { toEur, fetchEurRates, type Rates } from "../search/currency.ts";
 import {
   EXTRACT_PRODUCT_SYSTEM_PROMPT,
@@ -135,7 +136,7 @@ export async function extractFacts(
     priceAppearsIn(snapshot.pageText, product.pagePrice);
   const itemPriceEur =
     confirmed && product.pagePrice != null
-      ? toEur(product.pagePrice, product.pageCurrency ?? candidate.currency, rates)
+      ? toEur(product.pagePrice, product.pageCurrency ?? currencyForCountry(candidate.country), rates)
       : null;
 
   const base = {
@@ -180,13 +181,14 @@ export async function extractFacts(
     cache?.set(candidate.shop, shipping);
   }
 
+  const fallbackCurrency = currencyForCountry(candidate.country);
   const shippingCostEur =
     shipping.shippingCost != null
-      ? toEur(shipping.shippingCost, shipping.shippingCurrency ?? candidate.currency, rates)
+      ? toEur(shipping.shippingCost, shipping.shippingCurrency ?? fallbackCurrency, rates)
       : null;
   const freeShippingThresholdEur =
     shipping.freeShippingThreshold != null
-      ? toEur(shipping.freeShippingThreshold, shipping.thresholdCurrency ?? candidate.currency, rates)
+      ? toEur(shipping.freeShippingThreshold, shipping.thresholdCurrency ?? fallbackCurrency, rates)
       : null;
 
   return VerifiedFactsSchema.parse({

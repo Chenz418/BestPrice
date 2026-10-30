@@ -45,3 +45,6 @@ Thumbs.db
 
 # Local test assets (pasted product images, etc.)
 Products/
+
+# Project documents (academic report, design notes, plans — not needed to run)
+docs/

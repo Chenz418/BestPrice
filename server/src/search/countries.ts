@@ -1,4 +1,4 @@
-import type { ProductCard } from "@bestprice/shared";
+import type { ProductCard, SearchCoverage } from "@bestprice/shared";
 
 /**
  * Per-country search configuration: which language to query in and which
@@ -58,6 +58,99 @@ export const EUROZONE_COUNTRIES = Object.entries(EU_COUNTRIES)
   .filter(([, c]) => c.currency === "EUR")
   .map(([code]) => code)
   .sort();
+
+/**
+ * EU-27 countries where SerpApi's Google Shopping engine actually returns
+ * results. Passing a `gl` outside this set yields an empty `shopping_results`
+ * with NO error — a silent miss that quietly drops that market from the search.
+ *
+ * This list is deliberately CONSERVATIVE: if a country is wrongly excluded here
+ * we merely search a nearby proxy market (and tell the user via coverage),
+ * whereas wrongly *including* one would silently return nothing. Adjust as
+ * Google expands Shopping coverage. Non-EU markets (CH/NO/UK) are out of scope.
+ */
+export const GOOGLE_SHOPPING_COUNTRIES = new Set<string>([
+  "AT", "BE", "CZ", "DK", "FR", "DE", "IE", "IT", "NL", "PL", "PT", "RO", "ES", "SE",
+]);
+
+/**
+ * Replacement market for each EU country Google Shopping does NOT support.
+ * Chosen by proximity: a geographically/linguistically close market in the
+ * supported set (prefer same currency / shared language / a neighbour). The
+ * offer keeps its real market's country code; whether it ships to the user's
+ * delivery country is decided later by the Verify step, so searching a
+ * neighbouring market is a safe way to still surface relevant offers.
+ *
+ * Every value here MUST be a member of GOOGLE_SHOPPING_COUNTRIES.
+ */
+export const COUNTRY_REPLACEMENTS: Record<string, string> = {
+  BG: "RO", // Bulgaria   -> Romania  (neighbour)
+  HR: "AT", // Croatia    -> Austria  (EUR, near via SI)
+  CY: "IT", // Cyprus     -> Italy    (EUR, Mediterranean)
+  EE: "SE", // Estonia    -> Sweden   (Baltic neighbour)
+  FI: "SE", // Finland    -> Sweden   (Nordic neighbour, EUR item prices rare)
+  GR: "IT", // Greece     -> Italy    (EUR, Mediterranean)
+  HU: "AT", // Hungary    -> Austria  (neighbour)
+  LV: "PL", // Latvia     -> Poland   (regional)
+  LT: "PL", // Lithuania  -> Poland   (neighbour)
+  LU: "BE", // Luxembourg -> Belgium  (neighbour, FR/EUR)
+  MT: "IE", // Malta      -> Ireland  (English, EUR)
+  SI: "AT", // Slovenia   -> Austria  (neighbour, EUR)
+  SK: "CZ", // Slovakia   -> Czechia  (neighbour, mutually intelligible)
+};
+
+/** True if SerpApi's Google Shopping returns results for this country directly. */
+export function isGoogleShoppingSupported(country: string): boolean {
+  return GOOGLE_SHOPPING_COUNTRIES.has(country.toUpperCase());
+}
+
+/**
+ * Resolve the caller's requested countries into the markets we can actually
+ * query, reporting how each one was handled (B.1). Supported countries are
+ * searched directly; unsupported ones are swapped for their documented
+ * replacement market; any with no replacement are reported as `unsupported`.
+ * The returned `searched` list is de-duplicated — two requests that map to the
+ * same market only cost one SERP call.
+ */
+export function resolveSearchCoverage(requested: string[]): SearchCoverage {
+  const seen = new Set<string>();
+  const req: string[] = [];
+  for (const raw of requested) {
+    const c = raw.toUpperCase();
+    if (!seen.has(c)) {
+      seen.add(c);
+      req.push(c);
+    }
+  }
+
+  const direct: string[] = [];
+  const substituted: SearchCoverage["substituted"] = [];
+  const unsupported: string[] = [];
+  const searched = new Set<string>();
+
+  for (const c of req) {
+    if (GOOGLE_SHOPPING_COUNTRIES.has(c)) {
+      direct.push(c);
+      searched.add(c);
+      continue;
+    }
+    const via = COUNTRY_REPLACEMENTS[c];
+    if (via && GOOGLE_SHOPPING_COUNTRIES.has(via)) {
+      substituted.push({ requested: c, searchedVia: via });
+      searched.add(via);
+    } else {
+      unsupported.push(c);
+    }
+  }
+
+  return {
+    requested: req,
+    searched: [...searched].sort(),
+    direct,
+    substituted,
+    unsupported,
+  };
+}
 
 export function langForCountry(country: string): string {
   return EU_COUNTRIES[country.toUpperCase()]?.lang ?? "en";

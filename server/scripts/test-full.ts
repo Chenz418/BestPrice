@@ -39,7 +39,7 @@ import { verifyAndRank } from "../src/verify/verifyAndRank.ts";
 import { httpPageVerifier } from "../src/verify/pageVerifier.ts";
 import { EUROZONE_COUNTRIES, EU_COUNTRIES } from "../src/search/countries.ts";
 import { mockSerpProvider } from "../src/search/serp/mock.ts";
-import { serpApiProvider } from "../src/search/serp/serpapi.ts";
+import { googleProvider } from "../src/search/serp/google.ts";
 import { LlmError } from "../src/llm/responsesClient.ts";
 import { SearchError } from "../src/search/serp/types.ts";
 import { printTable, printRanked } from "./_printTable.ts";
@@ -129,20 +129,19 @@ async function main(): Promise<void> {
     console.log("\nProduct card:");
     console.log(JSON.stringify(card, null, 2));
 
-    // B — search
+    // B — search (Google-direct)
     const searchOpts: SearchOptions = { countries };
-    if (model) searchOpts.model = model;
     if (args.num && args.num !== "true") searchOpts.num = Number(args.num);
     if (args.provider === "mock") searchOpts.provider = mockSerpProvider;
-    else if (args.provider === "serpapi") searchOpts.provider = serpApiProvider;
+    else if (args.provider === "serpapi" || args.provider === "google") searchOpts.provider = googleProvider;
 
-    console.log("\n=== STEP B: Search (B.1–B.4) ===");
-    const table = await search(card, searchOpts);
-    printTable(table);
+    console.log("\n=== STEP B: Search (Google-direct) ===");
+    const list = await search(card, searchOpts);
+    printTable(list);
 
-    // C + D — verify and rank, using the HTTP page verifier
+    // C + D — verify and rank, using the server-side HTTP page verifier (test-only)
     console.log("\n=== STEP C/D: Verify + Rank ===");
-    const results = await verifyAndRank(table, {
+    const results = await verifyAndRank(list, {
       verify: httpPageVerifier,
       deliveryCountry: query.deliveryCountry ?? "IT",
       requestedSize: query.size ?? null,
