@@ -76,4 +76,4 @@ search.
 
 ## License
 
-Released as open source. See `LICENSE` if present, or add one before publishing.
+Released under the [MIT License](LICENSE).
